@@ -1,8 +1,8 @@
 use gl;
-use gl::types::{GLint, GLuint};
+use gl::types::{GLint, GLuint, GLboolean};
 use std::ffi::CString;
 /// from <https://github.com/nukep/rust-opengl-util/blob/master/shader.rs>
-use std::fs;
+use std::{fs, ptr};
 
 #[derive(Copy, Clone)]
 pub struct Attrib {
@@ -14,6 +14,8 @@ pub struct Attrib {
 /// The shader may be a vertex or fragment shader.
 pub struct Shader {
     pub id: GLuint,
+    pub src: String,
+    pub shader_type: GLuint,
 }
 impl Drop for Shader {
     /// Deletes the shader (`glDeleteShader()`)
@@ -32,17 +34,21 @@ fn load_source(path: &str) -> String {
 impl Shader {
     /// Compiles a vertex shader from source.
     pub fn vertex_from_source(path: &str) -> Result<Shader, String> {
-        Shader::from_source(load_source(path).as_str(), gl::VERTEX_SHADER)
+        Shader::from_source(path, gl::VERTEX_SHADER)
     }
 
     /// Compiles a fragment shader from source.
     pub fn fragment_from_source(path: &str) -> Result<Shader, String> {
-        Shader::from_source(load_source(path).as_str(), gl::FRAGMENT_SHADER)
+        Shader::from_source(path, gl::FRAGMENT_SHADER)
     }
 
-    fn from_source(source: &str, shader_type: GLuint) -> Result<Shader, String> {
+    fn from_source(path: &str, shader_type: GLuint) -> Result<Shader, String> {
+        let s = load_source(path);
+        let source = s.as_str();
         let shader = Shader {
             id: unsafe { gl::CreateShader(shader_type) },
+            src: path.to_string(),
+            shader_type
         };
         unsafe {
             let ptr: *const u8 = source.as_bytes().as_ptr();
@@ -74,6 +80,23 @@ impl Shader {
         }
     }
 
+    fn recompile(&mut self) -> Result<Shader, String> {
+        let src = self.src.clone();
+        let shader_type = self.shader_type;
+
+        drop(self);
+
+        match shader_type {
+            gl::VERTEX_SHADER => {
+                return Shader::vertex_from_source(src.as_str());
+            },
+            gl::FRAGMENT_SHADER => {
+                return Shader::fragment_from_source(src.as_str());
+            }
+            _ => { return Err("Unexpected shader type.".to_string()) }
+        }
+    }
+
     fn get_compilation_log(&self) -> String {
         let mut len = 0;
         unsafe { gl::GetShaderiv(self.id, gl::INFO_LOG_LENGTH, &mut len) };
@@ -97,6 +120,7 @@ impl Shader {
 pub struct Program {
     pub name: String,
     pub id: GLuint,
+    pub shaders: Vec<Shader>
 }
 impl Drop for Program {
     /// Deletes the program (`glDeleteProgram()`)
@@ -105,20 +129,38 @@ impl Drop for Program {
     }
 }
 impl Program {
+    pub fn reload(&mut self) -> Result<Program, String>  {
+        let new_shaders = self.shaders.iter_mut()
+        .map(|s| {
+            s.recompile().expect("failed to recompile shader.")
+        })
+        .collect::<Vec<Shader>>();
+
+        unsafe {
+            gl::DeleteProgram(self.id);
+        }
+
+        Program::link(self.name.clone(), "outcolor", new_shaders)
+
+    }
     /// Links a new program with the provided shaders.
     ///
     /// Uses `glAttachShader()` and `glLinkProgram()`
-    pub fn link(name: String, shaders: &[&Shader]) -> Result<Program, String> {
-        let program = Program {
+    pub fn link(name: String, output_color_var: &str, shaders: Vec<Shader>) -> Result<Program, String> {
+        let mut program = Program {
             name: name,
             id: unsafe { gl::CreateProgram() },
+            shaders: {
+                Vec::new()
+            }
         };
 
         let successful: bool;
 
         unsafe {
-            for shader in shaders.iter() {
+            for shader in shaders {
                 gl::AttachShader(program.id, shader.id);
+                program.shaders.push(shader);
             }
             gl::LinkProgram(program.id);
 
@@ -127,9 +169,26 @@ impl Program {
                 gl::GetProgramiv(program.id, gl::LINK_STATUS, &mut result);
                 result != 0
             };
+            
         }
 
         if successful {
+            unsafe {
+                // do some magic shader linking stuff
+                gl::BindFragDataLocation(program.id, 0, CString::new(output_color_var).unwrap().as_ptr());
+
+                // Specify the layout of the vertex data
+                let pos_attr = gl::GetAttribLocation(program.id, CString::new("position").unwrap().as_ptr());
+                gl::EnableVertexAttribArray(pos_attr as GLuint);
+                gl::VertexAttribPointer(
+                    pos_attr as GLuint,
+                    3, // Two components per vertex (x, y)
+                    gl::FLOAT,
+                    gl::FALSE as GLboolean,
+                    0, // Stride (0 means tightly packed)
+                    ptr::null(),
+                );
+            }
             Ok(program)
         } else {
             Err(program.get_link_log())

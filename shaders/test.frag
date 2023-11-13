@@ -17,7 +17,7 @@ float map_the_world(in vec3 p)
 
     float sphere_0 = distance_from_sphere(p, vec3(0.0), 1.0);
 
-    return sphere_0 + tan(displacement * time/2);
+    return sphere_0 + sin(time/2) + displacement;
 }
 
 vec3 calculate_normal(in vec3 p)

@@ -51,10 +51,7 @@ fn main() -> Result<(), String> {
         sdl2::sys::SDL_GL_GetProcAddress(c_str.as_ptr())
     });
 
-    // shaders
-    let vert = Shader::vertex_from_source("shaders/test.vert")?;
-    let frag = Shader::fragment_from_source("shaders/test.frag")?;
-    let shader = Program::link("test".to_string(), &[&vert, &frag])?;
+    
 
     let mut event_pump = sdl_context.event_pump()?;
 
@@ -77,49 +74,34 @@ fn main() -> Result<(), String> {
             gl::STATIC_DRAW,
         );
 
-        // Use shader program
-        shader.use_program(|context| {
-            context.set_vec2(
-                shader.get_uniform("resolution"),
-                (SCREEN_BOUNDS.0 as f32, SCREEN_BOUNDS.1 as f32),
-            );
-            // in case time isnt used i guess?
-            let uo = shader.get_uniform_option("time");
-            if uo.is_some() {
-                context.set_float(
-                    uo.unwrap(),
-                    stopwatch.elapsed_seconds() as f32
-                );
-            } 
-        });
-        gl::BindFragDataLocation(shader.id, 0, CString::new("outcolor").unwrap().as_ptr());
-
-        // Specify the layout of the vertex data
-        let pos_attr = gl::GetAttribLocation(shader.id, CString::new("position").unwrap().as_ptr());
-        gl::EnableVertexAttribArray(pos_attr as GLuint);
-        gl::VertexAttribPointer(
-            pos_attr as GLuint,
-            3, // Two components per vertex (x, y)
-            gl::FLOAT,
-            gl::FALSE as GLboolean,
-            0, // Stride (0 means tightly packed)
-            ptr::null(),
-        );
+        
         // gl::Viewport(0, 0, 900, 900);
     }
 
-    
+    // shaders
+    let vert = Shader::vertex_from_source("shaders/test.vert")?;
+    let frag = Shader::fragment_from_source("shaders/test.frag")?;
+    let s = {
+        let mut v = Vec::<Shader>::new();
+        v.push(vert);
+        v.push(frag);
+        v
+    };
+    let mut shader = Program::link("test".to_string(), "outcolor", s)?;
 
     'mainloop: loop {
         // poll events
         for e in event_pump.poll_iter() {
             match e {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => break 'mainloop,
-
+                Event::Quit { .. } => break 'mainloop,
+                Event::KeyDown { keycode, ..} => {
+                    match keycode.unwrap() {
+                        Keycode::R => {
+                            shader = shader.reload()?;
+                        },
+                        _ => {}
+                    }
+                },
                 _ => {}
             }
         }
@@ -153,7 +135,7 @@ fn main() -> Result<(), String> {
             // No need to unbind VAO here
             // gl::BindVertexArray(0);
 
-            gl::DrawArrays(gl::QUADS, 0, 6);
+            gl::DrawArrays(gl::QUADS, 0, 12);
 
             // Unbind VAO after drawing
             gl::BindVertexArray(0);
