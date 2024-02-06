@@ -7,8 +7,17 @@ use std::{
     mem, ptr,
 };
 
+mod vec3;
+use vec3::Vec3;
+
+mod camera;
+use camera::Camera;
+
 use gl::types::{GLboolean, GLfloat, GLsizeiptr, GLuint};
-use sdl2::{event::Event, keyboard::Keycode};
+use sdl2::{
+    event::Event,
+    keyboard::{Keycode, Scancode},
+};
 
 mod shader;
 use shader::{Attrib, Program, Shader};
@@ -17,14 +26,15 @@ mod stopwatch;
 use stopwatch::Stopwatch;
 
 const SCREEN_BOUNDS: (u32, u32) = (900, 900);
+const SENSITIVITY: f32 = 0.03;
 static VERTEX_DATA: [GLfloat; 12] = [
-    -1.0, 1.0, 0.0,// Top left
+    -1.0, 1.0, 0.0, // Top left
     1.0, 1.0, 0.0, // Top right
     1.0, -1.0, 0.0, // Bottom right
-    -1.0, -1.0, 0.0// Bottom left
+    -1.0, -1.0, 0.0, // Bottom left
 ];
 
-#[allow(clippy::cast_precision_loss)]
+#[allow(clippy::cast_precision_loss, clippy::too_many_lines)]
 fn main() -> Result<(), String> {
     // Fix on kde
     std::env::set_var("SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR", "0");
@@ -35,8 +45,8 @@ fn main() -> Result<(), String> {
     let stopwatch = Stopwatch::new();
     // video_subsystem.display_bounds(0);
 
-    let window = video_subsystem
-        .window("Lanternfly abahabba", SCREEN_BOUNDS.0, SCREEN_BOUNDS.1)
+    let mut window = video_subsystem
+        .window("Shader Window", SCREEN_BOUNDS.0, SCREEN_BOUNDS.1)
         .position_centered()
         .opengl()
         // .resizable()
@@ -50,8 +60,6 @@ fn main() -> Result<(), String> {
         let c_str = CString::new(s).unwrap();
         sdl2::sys::SDL_GL_GetProcAddress(c_str.as_ptr())
     });
-
-    
 
     let mut event_pump = sdl_context.event_pump()?;
 
@@ -74,37 +82,74 @@ fn main() -> Result<(), String> {
             gl::STATIC_DRAW,
         );
 
-        
         // gl::Viewport(0, 0, 900, 900);
     }
 
     // shaders
     let vert = Shader::vertex_from_source("shaders/test.vert")?;
-    let frag = Shader::fragment_from_source("shaders/test.frag")?;
+    let frag = Shader::fragment_from_source("shaders/sphere_torus_original.frag")?;
     let s = {
         let mut v = Vec::<Shader>::new();
         v.push(vert);
         v.push(frag);
         v
     };
-    let mut shader = Program::link("test".to_string(), "outcolor", s)?;
+    let mut shader = Program::link("hehehehaw".to_string(), "outcolor", s)?;
+
+    let mut cameraPos = Vec3::new(0.0, 0.0, -2.0);
+    let mut rot = Vec3::zero();
+    let mut movevec = Vec3::new(0.0, 0.0, 1.0);
+
+    window.set_grab(true);
+    sdl_context.mouse().show_cursor(false);
 
     'mainloop: loop {
         // poll events
         for e in event_pump.poll_iter() {
             match e {
                 Event::Quit { .. } => break 'mainloop,
-                Event::KeyDown { keycode, ..} => {
-                    match keycode.unwrap() {
-                        Keycode::R => {
-                            shader = shader.reload()?;
-                        },
-                        _ => {}
+                Event::KeyDown { keycode, .. } => match keycode.unwrap() {
+                    Keycode::R => {
+                        shader = shader.reload()?;
+                        cameraPos = Vec3::new(0.0, 0.0, -2.0);
                     }
+                    _ => {}
                 },
+                Event::MouseMotion { xrel, yrel, .. } => {
+                    rot.add_y(xrel as f32 * SENSITIVITY);
+                    rot.add_z(yrel as f32 * SENSITIVITY);
+                    sdl_context.mouse().warp_mouse_in_window(
+                        &window,
+                        (SCREEN_BOUNDS.0 / 2) as i32,
+                        (SCREEN_BOUNDS.1 / 2) as i32,
+                    );
+                }
                 _ => {}
             }
         }
+
+        let ks = event_pump.keyboard_state();
+
+        if ks.is_scancode_pressed(Scancode::W) {
+            cameraPos.add_z(0.1);
+        }
+        if ks.is_scancode_pressed(Scancode::A) {
+            cameraPos.add_x(-0.1);
+        }
+        if ks.is_scancode_pressed(Scancode::S) {
+            cameraPos.add_z(-0.1);
+        }
+        if ks.is_scancode_pressed(Scancode::D) {
+            cameraPos.add_x(0.1);
+        }
+        if ks.is_scancode_pressed(Scancode::Space) {
+            cameraPos.add_y(0.1);
+        }
+        if ks.is_scancode_pressed(Scancode::LShift) {
+            cameraPos.add_y(-0.1);
+        }
+
+        // cameraPos.z += 0.03;
 
         // drawing
         unsafe {
@@ -121,11 +166,15 @@ fn main() -> Result<(), String> {
             // in case time isnt used i guess?
             let uo = shader.get_uniform_option("time");
             if uo.is_some() {
-                context.set_float(
-                    uo.unwrap(),
-                    stopwatch.elapsed_seconds() as f32
-                );
-            } 
+                context.set_float(uo.unwrap(), stopwatch.elapsed_seconds() as f32);
+            }
+
+            context.set_vec3(
+                shader.get_uniform("cameraPos"),
+                (cameraPos.x(), cameraPos.y(), cameraPos.z()),
+            );
+            context.set_vec3(shader.get_uniform("rot"), (rot.x(), rot.y(), rot.z()));
+            // context.set_vec3(shader.get_uniform("rot"), (0_f32, 0_f32, stopwatch.elapsed_seconds() as f32));
         });
 
         unsafe {

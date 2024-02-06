@@ -236,7 +236,7 @@ impl Program {
         }
     }
 
-    fn get_link_log(&self) -> String {
+    pub fn get_link_log(&self) -> String {
         let mut len = 0;
         unsafe { gl::GetProgramiv(self.id, gl::INFO_LOG_LENGTH, &mut len) };
         assert!(len > 0);
