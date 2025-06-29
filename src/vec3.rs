@@ -50,6 +50,23 @@ impl Vec3 {
     pub fn add_z(&mut self, z: f32) {
         self.z += z;
     }
+    pub fn add(&mut self, other: &Vec3) {
+        self.x += other.x;
+        self.y += other.y;
+        self.z += other.z;
+    }
+    pub fn rotate(&mut self, deg_vec: &Vec3) {
+        let x: f32 = self.x;
+        let y: f32 = self.y;
+        let z: f32 = self.z;
+
+        // rotation around specified axis. x_rot = rotation around x axis
+        let x_rot = deg_vec.x;
+        let y_rot = deg_vec.y;
+        let z_rot = deg_vec.z;
+
+        // self.x = x_rot.cos()*y_rot.cos() + (x_rot.cos()*y_rot.sin()*z_rot.sin()-);
+    }
     
     pub fn normalize(&mut self) {
         self.x = self.x.sqrt();

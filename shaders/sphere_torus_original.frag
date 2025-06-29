@@ -69,7 +69,7 @@ float mandelbulbSdf(vec3 pos, out int steps) {
 	vec3 z = pos;
 	float dr = 1.0;
 	float r = 0.0;
-    float Power = sin(-time/7) - 4;
+    float Power = time - 5;
     // float Power = -5;
 	for (int i = 0; i < 20 ; i++) {
 		r = length(z);

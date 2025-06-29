@@ -26,7 +26,7 @@ mod stopwatch;
 use stopwatch::Stopwatch;
 
 const SCREEN_BOUNDS: (u32, u32) = (900, 900);
-const SENSITIVITY: f32 = 0.03;
+const SENSITIVITY: f32 = 0.01;
 static VERTEX_DATA: [GLfloat; 12] = [
     -1.0, 1.0, 0.0, // Top left
     1.0, 1.0, 0.0, // Top right
@@ -96,8 +96,8 @@ fn main() -> Result<(), String> {
     };
     let mut shader = Program::link("hehehehaw".to_string(), "outcolor", s)?;
 
-    let mut cameraPos = Vec3::new(0.0, 0.0, -2.0);
-    let mut rot = Vec3::zero();
+    let mut camera_pos = Vec3::new(0.0, 0.0, -2.0);
+    let mut camera_rotation = Vec3::zero();
     let mut movevec = Vec3::new(0.0, 0.0, 1.0);
 
     window.set_grab(true);
@@ -111,13 +111,13 @@ fn main() -> Result<(), String> {
                 Event::KeyDown { keycode, .. } => match keycode.unwrap() {
                     Keycode::R => {
                         shader = shader.reload()?;
-                        cameraPos = Vec3::new(0.0, 0.0, -2.0);
+                        camera_pos = Vec3::new(0.0, 0.0, -2.0);
                     }
                     _ => {}
                 },
                 Event::MouseMotion { xrel, yrel, .. } => {
-                    rot.add_y(xrel as f32 * SENSITIVITY);
-                    rot.add_z(yrel as f32 * SENSITIVITY);
+                    camera_rotation.add_y(xrel as f32 * SENSITIVITY);
+                    camera_rotation.add_z(yrel as f32 * SENSITIVITY);
                     sdl_context.mouse().warp_mouse_in_window(
                         &window,
                         (SCREEN_BOUNDS.0 / 2) as i32,
@@ -131,22 +131,22 @@ fn main() -> Result<(), String> {
         let ks = event_pump.keyboard_state();
 
         if ks.is_scancode_pressed(Scancode::W) {
-            cameraPos.add_z(0.1);
+            camera_pos.add_z(0.1);
         }
         if ks.is_scancode_pressed(Scancode::A) {
-            cameraPos.add_x(-0.1);
+            camera_pos.add_x(-0.1);
         }
         if ks.is_scancode_pressed(Scancode::S) {
-            cameraPos.add_z(-0.1);
+            camera_pos.add_z(-0.1);
         }
         if ks.is_scancode_pressed(Scancode::D) {
-            cameraPos.add_x(0.1);
+            camera_pos.add_x(0.1);
         }
         if ks.is_scancode_pressed(Scancode::Space) {
-            cameraPos.add_y(0.1);
+            camera_pos.add_y(0.1);
         }
         if ks.is_scancode_pressed(Scancode::LShift) {
-            cameraPos.add_y(-0.1);
+            camera_pos.add_y(-0.1);
         }
 
         // cameraPos.z += 0.03;
@@ -166,14 +166,14 @@ fn main() -> Result<(), String> {
             // in case time isnt used i guess?
             let uo = shader.get_uniform_option("time");
             if uo.is_some() {
-                context.set_float(uo.unwrap(), stopwatch.elapsed_seconds() as f32);
+                context.set_float(uo.unwrap(), 0.4 * (stopwatch.elapsed_seconds() as f32));
             }
 
             context.set_vec3(
                 shader.get_uniform("cameraPos"),
-                (cameraPos.x(), cameraPos.y(), cameraPos.z()),
+                (camera_pos.x(), camera_pos.y(), camera_pos.z()),
             );
-            context.set_vec3(shader.get_uniform("rot"), (rot.x(), rot.y(), rot.z()));
+            context.set_vec3(shader.get_uniform("rot"), (camera_rotation.x(), camera_rotation.y(), camera_rotation.z()));
             // context.set_vec3(shader.get_uniform("rot"), (0_f32, 0_f32, stopwatch.elapsed_seconds() as f32));
         });
 
